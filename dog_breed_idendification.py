@@ -183,8 +183,76 @@ def get_image_label(image_path,label):
   """
   Takes file path and label, processes image and returns tuple of (image, label)
   """
-  image=process_image(image),
+  image=process_image(image_path)
   return image,label
 
 (process_image(x[32]),tf.constant(y[32]))
+
+BATCH_SIZE=20
+
+def create_data_batches(x,y=None, batch_size=BATCH_SIZE,valid_data=False,test_data=False):
+  """
+  Convert Data (x abd y pairs) into batches.
+  Shuffles data if it's training data but doesn't shuffle validation data.
+  Also accepts test data as input (no labels).
+  """
+
+  # If Test Data (No Labels)
+  if test_data:
+    print("Creating Test Data Batches...")
+    data=tf.data.Dataset.from_tensor_slices((tf.constant(x)))   #Only filepaths No Labels
+    data_batch=data.map(process_image).batch(BATCH_SIZE)
+    return data_batch
+
+  # If Valid Data (No shuffling required)
+  elif valid_data:
+    print("Creating Valid Data Batches...")
+    data=tf.data.Dataset.from_tensor_slices((tf.constant(x),tf.constant(y)))      #Filepaths,Labels
+    data_batch=data.map(get_image_label).batch(BATCH_SIZE)
+    return data_batch
+
+  else:
+    print("Creating Training Data Batches...")
+    data=tf.data.Dataset.from_tensor_slices((tf.constant(x),tf.constant(y)))
+    # Shuffling before Mapping is faster
+    data=data.shuffle(buffer_size=len(x))
+    data=data.map(get_image_label)
+    data_batch=data.batch(BATCH_SIZE)
+  return data_batch
+
+train_data=create_data_batches(x_train,y_train)
+val_data=create_data_batches(x_val,y_val,valid_data=True)
+
+#Checking Different attributes of Data batches
+train_data.element_spec, val_data.element_spec
+
+"""###Visualizing Data Batches"""
+
+import matplotlib.pyplot as plt
+
+def show_20_images(images,labels):
+  plt.figure(figsize=(10,10))
+  for i in range(20):
+    # 4 rows 4 columns i+1 index
+    ax=plt.subplot(5,4,i+1)
+    plt.imshow(images[i])
+    #gives label name where label has highest value(ie. True or 1) in labels list in unique breeds.
+    plt.title(unique_breeds[labels[i].argmax()])
+    # To turn gridlines off
+    plt.axis("off")
+
+train_data
+
+"""Turn `train_data` `val_data` into an iterator type. (Right now it is Batch Dataset type.)"""
+
+#Everytime this cell is run images will be new as data is shuffled
+train_images,train_labels=next(train_data.as_numpy_iterator())
+train_images,train_labels
+
+len(train_images),len(train_labels)
+
+show_20_images(train_images,train_labels)
+
+val_images, val_labels=next(val_data.as_numpy_iterator())
+show_20_images(val_images,val_labels)
 
