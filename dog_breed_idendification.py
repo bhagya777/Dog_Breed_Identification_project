@@ -153,7 +153,7 @@ tf.constant(image)[:2]
 
 """## Function Creation"""
 
-IMG_SIZE=250
+IMG_SIZE=224
 
 def process_image(image_path,img_size=IMG_SIZE):
   """
@@ -255,4 +255,237 @@ show_20_images(train_images,train_labels)
 
 val_images, val_labels=next(val_data.as_numpy_iterator())
 show_20_images(val_images,val_labels)
+
+"""# Building a Model
+   Things to define:
+   1. The input shape (image shape in the form of tensor) to the model.
+   2. The output shape (labels shape in the form of tensor) of the model.
+   3. The URL of the Model we want to use.
+
+URL is from TensorFlow Hub : "https://kaggle.com/models/google/mobilenet-v2/TensorFlow2/130-224-classification/1"
+
+We are goint to use Sequential Keras API
+"""
+
+INPUT_SHAPE=[None,IMG_SIZE,IMG_SIZE,3]       #batch, height, width, color channels
+OUTPUT_SHAPE=len(unique_breeds)
+
+MODEL_URL="https://kaggle.com/models/google/mobilenet-v2/TensorFlow2/130-224-classification/1"
+
+"""### Puttng input, output, model into Keras Deep Learning Model.
+  * The Function Should :
+    1. INPUT_SHAPE, OUTPUT_SHAPE, Model as parameters.
+    2. Define layers in Keras MOdel in Sequential Model.
+    3. Compiles Model (It should be evaluated and improved).
+    4. Builds the Model (Tells Model input shape it will be getting).
+    5. Returns the Model.
+
+Refer: https://www.tensorflow.org/guide/keras
+
+"""
+
+def create_model(input_shape=INPUT_SHAPE, output_shape=OUTPUT_SHAPE, model_url=MODEL_URL):
+  print("Building Model with:", MODEL_URL)
+
+  #Setting up the layers
+  model=tf.keras.Sequential([
+    tf.keras.layers.InputLayer(input_shape=input_shape[1:]),  #Layer 1 (Input layer)
+    tf.keras.layers.Lambda(lambda x: hub.KerasLayer(MODEL_URL)(x)),
+    tf.keras.layers.Dense(units=OUTPUT_SHAPE,activation="softmax")   #Layer 2 (Output Layer)
+])
+
+  #Compile The Model
+  model.compile(
+      loss=tf.keras.losses.CategoricalCrossentropy(),
+      optimizer=tf.keras.optimizers.Adam(),
+      metrics=["accuracy"]
+  )
+
+  #Build The Model
+  model.build(INPUT_SHAPE)
+
+  return model
+
+"""##### `softmax` is used for Multi class classification similar to `sigmoid` is used for Binary classification."""
+
+model=create_model()
+model.summary()
+
+"""###  Creating callbacks
+Callbacks are helper functions a model can use. It checks model's progress, saves the progress, stop training it early if the model stops improving.
+
+We are going to create two callbacks here, one for TensorBoard (used to understand model's progress and improve model's performance by updating hyperparameters) to track model's progress and another for early stopping thereby preventing it from training too long.
+
+#### TensorFlow Callback
+Steps:                                               
+1. Load TensorBoard notebook extension
+2. Create TensorFlow Callback to save logs to a directory and pass it to a model's `fit()` function
+3. Visualize model's training logs `%tensorboard` magic function
+"""
+
+# Commented out IPython magic to ensure Python compatibility.
+# %load_ext tensorboard
+
+import datetime
+
+def create_tensorboard_callback():
+  #Creating log directory for storing tensorboard logs
+  logdir=os.path.join("drive/MyDrive/Dog_Breed_Identification_project/logs",
+                      datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+  return tf.keras.callbacks.TensorBoard(logdir)
+
+"""#### Early Stopping Callback
+It helps prevent model from overfitting by stopping training if a certain evaluation metric stops improving.
+
+Refer: https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/EarlyStopping
+"""
+
+early_stopping=tf.keras.callbacks.EarlyStopping(monitor="val_accuracy",patience=3)
+
+"""# Training the Model
+Model is trained on subset of 1000 images
+"""
+
+NUM_EPOCHS=100 #@param{type:"slider",min:10,max:100,step:10}
+
+"""## Creating Fuction
+Function should:
+1. Create a model using `create_model()`
+2. Set up Tensorboard callback using `create_tensorboard_callback()`
+3. Call `fit()` function. Pass it training data, validation data, number of epochs to train for (NUM_EPOCHS) and the callback
+4. Return the model
+"""
+
+def train_model():
+  model=create_model()
+  tensorboard=create_tensorboard_callback()
+  model.fit(x=train_data,
+            epochs=NUM_EPOCHS,
+            validation_data=val_data,
+            validation_freq=1,
+            callbacks=[tensorboard,early_stopping])
+  return model
+
+"""Epochs means number of times model should be trained on training set. validation_frq means number of times model should be tested on validation set. First epoch requires longest time compared to the remaining."""
+
+model=train_model()
+
+"""## Tensorboard"""
+
+# Commented out IPython magic to ensure Python compatibility.
+# %tensorboard --logdir drive/MyDrive/Dog_Breed_Identification_project/logs
+
+"""# Prediction and Evaluation Using Trained Model
+
+## Making Predictions
+"""
+
+predictions=model.predict(val_data, verbose=1)
+predictions
+
+predictions.shape
+
+len(y_val)
+
+predictions[0]
+
+np.sum(predictions[0])
+
+"""## Unbatch the batched dataset (validation) and compare the predicted labels with actual ones (truth)."""
+
+def get_the_prediction(prediction_probabilities):
+  pred_label=unique_breeds[np.argmax(prediction_probabilities)]
+  return pred_label
+get_the_prediction(predictions[0])
+
+def unbatchify(data):
+  images=[]
+  labels=[]
+  for image,label in data.unbatch().as_numpy_iterator():
+    images.append(image)
+    labels.append(unique_breeds[np.argmax(label)])
+  return images, labels
+
+val_images, val_labels=unbatchify(val_data)
+val_images[0], val_labels[0]
+
+get_the_prediction(val_labels[0])
+
+"""## Plot the image with labels (predicted and actual with confidence"""
+
+def plot_pred(prediction_probabilities,labels,images,n=1):
+  pred_prob,true_label,image=prediction_probabilities[n],labels[n],images[n]
+
+  pred_label=get_the_prediction(pred_prob)
+
+  plt.imshow(image)
+  plt.xticks([])
+  plt.yticks([])
+
+  if pred_label==true_label:
+    color="green"
+  else:
+    color="red"
+
+  plt.title("{}{:2.0f}%{}".format(pred_label,np.max(pred_prob)*100,true_label),color=color)
+
+plot_pred(prediction_probabilities=predictions,labels=val_labels,images=val_images,n=0)
+
+"""## Plot top 10 images according to confidences"""
+
+def top_10_conf(prediction_probabilities,labels,n=1):
+  pred_prob,true_label=prediction_probabilities[n],labels[n]
+
+  pred_label=get_the_prediction(pred_prob)
+
+  top_10_pred_indexes=pred_prob.argsort()[-10:][::-1]
+  top_10_confidence_values=pred_prob[top_10_pred_indexes]
+  top_10_pred_labels=unique_breeds[top_10_pred_indexes]
+
+  top_plot=plt.bar(np.arange(len(top_10_pred_labels)),top_10_confidence_values,color="grey")
+  plt.xticks(np.arange(len(top_10_pred_labels)),labels=top_10_pred_labels,rotation="vertical")
+
+  if np.isin(true_label,top_10_pred_labels):
+    top_plot[np.argmax(top_10_pred_labels==true_label)].set_color("green")
+  else:
+    pass
+
+top_10_conf(predictions,val_labels,1)
+
+i_multiplier=0
+num_rows=3
+num_cols=2
+num_images=num_rows*num_cols
+plt.figure(figsize=(10*num_cols,5*num_rows))
+for i in range(num_images):
+  plt.subplot(num_rows,2*num_cols,2*i+1)
+  plot_pred(prediction_probabilities=predictions,labels=val_labels,images=val_images,n=i+i_multiplier)
+  plt.subplot(num_rows,2*num_cols,2*i+2)
+  top_10_conf(prediction_probabilities=predictions,labels=val_labels,n=i+i_multiplier)
+
+plt.tight_layout(h_pad=1.0)
+plt.show()
+
+"""# Saving and Reloading Trained Model"""
+
+def save_model(model,suffix=None):
+  modeldir=os.path.join("drive/MyDrive/Dog_Breed_Identification_project/models",datetime.datetime.now().strftime("%Y%m%d-%H%M%s"))
+  model_path=modeldir+"-"+suffix+".h5"
+  print(f"Saving Model to: {model_path}...")
+  model.save(model_path)
+  print(model_path)
+
+def load_model(model_path):
+  print(f"Loading model from: {model_path}...")
+  model=create_model()
+  model.load_weights(model_path)
+  return model
+
+save_model(model,suffix="1000-images-MobileNetV2-Adam")
+
+loaded_model_1000_images=load_model("drive/MyDrive/Dog_Breed_Identification_project/models/20241223-14491734965381-1000-images-MobileNetV2-Adam.h5")
+
+model.evaluate(val_data)
+
+loaded_model_1000_images.evaluate(val_data)
 
