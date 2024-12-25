@@ -483,9 +483,70 @@ def load_model(model_path):
 
 save_model(model,suffix="1000-images-MobileNetV2-Adam")
 
-loaded_model_1000_images=load_model("drive/MyDrive/Dog_Breed_Identification_project/models/20241223-14491734965381-1000-images-MobileNetV2-Adam.h5")
+loaded_model_1000_images=load_model("drive/MyDrive/Dog_Breed_Identification_project/models/20241225-08011735113692-1000-images-MobileNetV2-Adam.h5")
 
 model.evaluate(val_data)
 
 loaded_model_1000_images.evaluate(val_data)
+
+"""# Training the model on full Dataset"""
+
+full_data=create_data_batches(x,y)
+
+full_data
+
+full_model=create_model()
+
+full_model_tensorboard=create_tensorboard_callback()
+full_model_early_stopping=tf.keras.callbacks.EarlyStopping(monitor="accuracy",patience=3)
+
+full_model.fit(x=full_data,
+               epochs=NUM_EPOCHS,
+               callbacks=[full_model_tensorboard,full_model_early_stopping])
+
+save_model(full_model,suffix="full-image-set-mobilenetv2-Adam")
+
+"""# Making Predictions"""
+
+loaded_full_model=load_model("drive/MyDrive/Dog_Breed_Identification_project/models/20241225-08221735114970-full-image-set-mobilenetv2-Adam.h5")
+
+test_path="drive/MyDrive/Dog_Breed_Identification_project/test/"
+test_filenames=[test_path+fname for fname in os.listdir(test_path)]
+test_filenames[:10]
+
+len(test_filenames)
+
+test_data=create_data_batches(test_filenames,test_data=True)
+
+test_data
+
+test_predictions=loaded_full_model.predict(test_data,verbose=1)
+
+np.savetxt("drive/MyDrive/Dog_Breed_Identification_project/predictions.csv",test_predictions,delimiter=",")
+
+test_predictions=np.loadtxt("drive/MyDrive/Dog_Breed_Identification_project/predictions.csv",delimiter=",")
+
+test_predictions[:10]
+
+test_predictions.shape
+
+"""# Submission to Kaggle
+Making the Dataframe to export as csv to subit in requred format in Kaggle
+"""
+
+preds_df=pd.DataFrame(columns=["id"]+list(unique_breeds))
+preds_df.head()
+
+test_ids=[os.path.splitext(path)[0] for path in os.listdir(test_path)]
+test_ids
+
+os.path.splitext(test_filenames[0])
+
+preds_df["id"]=test_ids
+preds_df.head()
+
+preds_df[list(unique_breeds)]=test_predictions
+preds_df.head()
+
+preds_df.to_csv("drive/MyDrive/Dog_Breed_Identification_project/Full_Model_Predictions_Submission_mobilenetv2.csv",index=False)
 
